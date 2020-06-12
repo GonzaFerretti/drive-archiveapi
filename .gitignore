@@ -1,0 +1,6 @@
+.idea/
+__pycache__/
+api/__pycache__/
+config_prod.py
+/venv/
+/.vscode/
