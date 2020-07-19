@@ -9,20 +9,20 @@ from datetime import datetime
 from apiclient import errors
 from apiclient.http import MediaIoBaseUpload
 from io import BytesIO
+from config import ROOT_CLIENTS_FOLDER
 import magic
 import base64 
-'''
-DRIVE = None
 
-def connect_to_drive():
-    '''
 SCOPES = 'https://www.googleapis.com/auth/drive'
 store = file.Storage('storage.json')
 creds = store.get()
 if not creds or creds.invalid:
-    flow = client.flow_from_clientsecrets('client_secret.json', SCOPES)
-    creds = tools.run_flow(flow, store)
+        flow = client.flow_from_clientsecrets('client_secret.json', SCOPES)
+        creds = tools.run_flow(flow, store)
+        #print('Client secret file couldn\'t be found. Make sure there\'s a "client_secret.json file with Google API\'s secret before running this app again')
 DRIVE =  build('drive', 'v2', http=creds.authorize(Http()))
+clientDirs = {}
+dailyFolders = {}
 
 def get_children_folder_id_by_name(parentFolderId,nameToMatch,shouldCreate):
     childrenResponse = None
@@ -56,32 +56,77 @@ def get_children_folder_id_by_name(parentFolderId,nameToMatch,shouldCreate):
             return None
     return childrenClientId
         
-def setup_client(clientName, client_label):
-    #connect_to_drive()
-    with open('clientes.json') as json_file:
-        clientDirs = json.load(json_file)
-    clientsFolderId = clientDirs['ClientsFolder']
-    clientFolderId = get_children_folder_id_by_name(clientsFolderId,clientName,False)
-    if clientFolderId is not None:
-        operationsFolderId = get_children_folder_id_by_name(clientFolderId,"Operaciones",True)
-        historyFolderId = get_children_folder_id_by_name(operationsFolderId, "Historico", True)
-        print("Client added successfully! Folder Id " + historyFolderId)
-        clientDirs[client_label] = historyFolderId
-        with open('clientes.json', 'w') as fp:
-            json.dump(clientDirs, fp)
-        return "Client added sucessfully.", 200
-    else:
-        return "Client base folder doesn't exist", 400
+# def setup_client(clientName, client_label):
+#     #connect_to_drive()
+#     with open('clientes.json') as json_file:
+#         clientDirs = json.load(json_file)
+#     clientsFolderId = ROOT_CLIENTS_FOLDER
+#     clientFolderId = get_children_folder_id_by_name(clientsFolderId,clientName,False)
+#     if clientFolderId is not None:
+#         operationsFolderId = get_children_folder_id_by_name(clientFolderId,"Operaciones",True)
+#         historyFolderId = get_children_folder_id_by_name(operationsFolderId, "Historico", True)
+#         print("Client added successfully! Folder Id " + historyFolderId)
+#         clientDirs[client_label] = historyFolderId
+#         with open('clientes.json', 'w') as fp:
+#             json.dump(clientDirs, fp)
+#         return "Client added sucessfully.", 200
+#     else:
+#         return "Client base folder doesn't exist", 400
 
-def get_client_folder_id(client_label):
-    with open('clientes.json') as json_file:
-        clientDirs = json.load(json_file)
-    try:
-        folderId = clientDirs[client_label]
-        return folderId
-    except:
-        print("Client doesn't exist.")
-        return None
+def update_clients_list():
+    clientFolders = DRIVE.children().list(q="mimeType='application/vnd.google-apps.folder' and trashed=False", folderId=ROOT_CLIENTS_FOLDER).execute()
+    print('Updating client list.')
+    for folder in clientFolders.get('items', []):
+        filesResponse = DRIVE.children().list(q="title contains 'noborrar' and trashed=False", folderId=folder['id']).execute()
+        filesFound = filesResponse['items']
+        if (len(filesFound) > 0):
+            labelFile = DRIVE.files().get(fileId=filesFound[0]['id']).execute()
+            fileName = labelFile['title']
+            label = fileName.split('.')[0]
+            clientFolderId = folder['id']
+            operationsFolderId = get_children_folder_id_by_name(clientFolderId,"Operaciones",True)
+            historyFolderId = get_children_folder_id_by_name(operationsFolderId, "Historico", True)
+            print("Client folder for " + label + " found successfully! History Folder Id: " + historyFolderId)
+            clientDirs[label] = historyFolderId
+    if len(clientDirs) == 0:
+        print('No clients were found')
+    return str(clientDirs), 200
+
+def get_daily_folder(client_label):
+    currentDay = datetime.today()
+    clientFolderId = None
+    if client_label in clientDirs:
+        clientFolderId = clientDirs[client_label]
+    else:
+        print("Client history folder wasn\'t found.")
+        update_clients_list()
+        if client_label in clientDirs:
+            clientFolderId = clientDirs[client_label]
+        else:
+            print('Client base folder wasn\'t found. Make sure there is a clientName.noborrar file in the client\'s base folder')
+            return None
+    if client_label in dailyFolders and currentDay.date() == dailyFolders[client_label][1].date():
+        print("Found daily folder for " + client_label)
+        return dailyFolders[client_label][0]
+    else:
+        print("Daily folder for " + client_label + " wasn\'t found. Creating folder...")
+        yearMonth = datetime.now().strftime("%Y%m")
+        yearMonthDay = datetime.now().strftime("%Y%m%d")
+        yearMonthId = get_children_folder_id_by_name(clientFolderId,yearMonth,True)
+        yearMonthDayId = get_children_folder_id_by_name(yearMonthId,yearMonthDay,True)
+        dailyFolders[client_label] = (yearMonthDayId,datetime.today())
+        print("Daily folder successfully created.")
+        return dailyFolders[client_label][0]
+
+# def get_client_folder_id(client_label):
+#     with open('clientes.json') as json_file:
+#         clientDirs = json.load(json_file)
+#     try:
+#         folderId = clientDirs[client_label]
+#         return folderId
+#     except:
+#         print("Client doesn't exist.")
+#         return None
 
 def archive_file(file, file_name, client_label):
     #connect_to_drive()
@@ -89,14 +134,13 @@ def archive_file(file, file_name, client_label):
     file_content=base64.b64decode(s=file)
     yearMonth = datetime.now().strftime("%Y%m")
     yearMonthDay = datetime.now().strftime("%Y%m%d")
-    clientFolderId = get_client_folder_id(client_label)
-    if clientFolderId is None:
-        return "Client doesn't exist. Please set it up first.", 400
-    yearMonthId = get_children_folder_id_by_name(clientFolderId,yearMonth,True)
-    yearMonthDayId = get_children_folder_id_by_name(yearMonthId,yearMonthDay,True)
+    yearMonthDayId = get_daily_folder(client_label)
+    if yearMonthDayId is None:
+        return "Client not found", 404
+
     insert_response = insert_file(service=DRIVE, title=file_name, parent_id=yearMonthDayId, file_content = file_content)
     if insert_response:
-        print('Created file %s/Operaciones/Historico/%s/%s/%s' % (client_label, yearMonth, yearMonthDay, file_name))
+        print('Created file /Operaciones/Historico/%s/%s/%s in %s base folder' % (yearMonth, yearMonthDay, file_name, client_label))
     return insert_response
 
 
@@ -104,7 +148,7 @@ def insert_file(service, title, parent_id, file_content):
     file_bytes = BytesIO(file_content)
     mime_type = magic.from_buffer(file_bytes.read(),mime=True)
     print('Detected mimetype: ' +  mime_type)
-    media_body = MediaIoBaseUpload(file_bytes, resumable=False, mimetype=mime_type)
+    media_body = MediaIoBaseUpload(file_bytes, resumable=True, mimetype=mime_type)
     body = {
         'title': title,
     }
