@@ -5,21 +5,19 @@ Uses Django, Flask and the GDrive API.
 
 How to use:
 
-The initial archive folder structure should be:
+The initial archive folder structure in Google Drive should be:
 
-ArchiveBaseFolder
+- ArchiveBaseFolder/BusinessUnit1/BusinessUnit1Label.noborrar
+- ArchiveBaseFolder/BusinessUnit2/BusinessUnit2Label.noborrar
 
-./BusinessUnit1/BusinessUnit1Label.noborrar
-./BusinessUnit2/BusinessUnit2Label.noborrar
-
-and so on. From then, this integration will handle archiving it in different folders according to date.
+and so on. From then on, this integration will handle archiving it in different folders according to date. Additional BusinessUnits may be created freely, provided they have the .noborrar file to mark them.
 
 The following calls are available:
 
 - /api/archive/addfile/<client_label>/<file_name> (POST)
 The body should contain the BASE64 form of the file to archive, <client_label> is the business unit LABEL, the name of the .noborrar file. <file_name> should contain the filename including the file extension.
 
-/api/archive/updateclients (POST)
+- /api/archive/updateclients (POST)
 This call force-checks for new business units, this is not necessary except for troubleshooting. Normally, trying to add a file to a currently non-cached business unit folder will trigger this automatically.
 
 
