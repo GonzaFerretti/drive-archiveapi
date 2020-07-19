@@ -1,15 +1,16 @@
 # Google Drive Report Archiving API.
-integration with GDrive that allows file reports from different business units to be archived and organized properly, through a simple REST API.
+Integration with GDrive that allows file reports from different business units to be archived and organized properly in Google Drive, through a simple REST API.
 
 Uses Django, Flask and the GDrive API.
 
 How to use:
+
 The initial archive folder structure should be:
+
 ArchiveBaseFolder
-├── BusinessUnit1
-| └── BusinessUnit1Label.noborrar
-├── BusinessUnit2
-| └── BusinessUnitLabel.noborrar
+
+./BusinessUnit1/BusinessUnit1Label.noborrar
+./BusinessUnit2/BusinessUnit2Label.noborrar
 
 and so on. From then, this integration will handle archiving it in different folders according to date.
 
